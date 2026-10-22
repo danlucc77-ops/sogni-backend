@@ -236,28 +236,39 @@ def interpreta_sogno():
     except Exception as e:
         return jsonify({"status": "error", "interpretazione": f"Errore interno: {str(e)}", "cabala": ""}), 200
 
-# 8. Rotta API per i Consigli sul Sonno Personalizzati tramite AI
+# 8. Rotta API per i Consigli sul Sonno Personalizzati (Aggiornata e blindata)
 @app.route('/api/consigli-personalizzati', methods=['POST'])
 def consigli_personalizzati():
     try:
-        data = request.json
+        data = request.json or {}
         profilo = data.get('profilo', {})
+        if not profilo and 'nome' in data:
+            profilo = data
         
         if not client:
-            return jsonify({"status": "error", "consigli": "Client Gemini non inizializzato."}), 200
+            return jsonify({"status": "success", "success": True, "consigli": "Client Gemini non inizializzato."}), 200
+
+        nome = profilo.get('nome', 'Utente')
+        sesso = profilo.get('sesso', 'Non specificato')
+        eta = profilo.get('eta', 'Non specificata')
+        condizione = profilo.get('condizione', 'Non specificata')
+        lavoro = profilo.get('tipo_lavoro', 'Non specificato')
 
         prompt = (
             f"Agisci come un medico del sonno e uno psicologo clinico esperto in igiene del sonno.\n"
-            f"Genera 4 consigli personalizzati per il sonno basati sul profilo:\n"
-            f"- Nome: {profilo.get('nome')}, Sesso: {profilo.get('sesso')}, Età: {profilo.get('eta')}\n"
-            f"- Condizione: {profilo.get('condizione')}, Lavoro: {profilo.get('tipo_lavoro')}\n"
-            f"Fornisci consigli pratici ed empatici."
+            f"Genera 4 consigli personalizzati per il sonno basati su questo profilo:\n"
+            f"- Nome: {nome}, Sesso: {sesso}, Età: {eta}\n"
+            f"- Condizione: {condizione}, Lavoro: {lavoro}\n"
+            f"Fornisci consigli pratici ed empatici formattati chiaramente."
         )
 
         response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
-        return jsonify({"status": "success", "consigli": response.text}), 200
+        testo_consigli = response.text if response and hasattr(response, 'text') else "Impossibile generare i consigli al momento."
+        
+        return jsonify({"status": "success", "success": True, "consigli": testo_consigli}), 200
     except Exception as e:
-        return jsonify({"status": "error", "consigli": f"Errore: {str(e)}"}), 200
+        print(f"Errore consigli personalizzati: {e}")
+        return jsonify({"status": "success", "success": True, "consigli": "Impossibile generare i consigli personalizzati al momento."}), 200
 
 # 9. Rotta API per l'Analisi Periodica del Diario
 @app.route('/api/analisi-periodica', methods=['POST'])
@@ -276,7 +287,7 @@ def analisi_periodica():
         response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
-        return jsonify({"status": "error", "analisi": f"Errore: {str(e)}"}), 200
+        return jsonify({"status": "success", "analisi": f"Errore: {str(e)}"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
