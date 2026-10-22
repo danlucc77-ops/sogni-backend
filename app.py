@@ -64,7 +64,7 @@ try:
 except Exception as e:
     print(f"Errore nell'inizializzazione di Gemini: {e}")
 
-# 3. Funzione ultraleggera (zero consumo di RAM)
+# 3. Funzione ultraleggera per il recupero delle estrazioni (zero RAM)
 def scarica_ultime_estrazioni():
     try:
         url = "https://www.totoproject.com/giochi/lotto_stat_u50.asp"
@@ -170,7 +170,7 @@ def aggiorna_profilo():
     finally:
         conn.close()
 
-# 7. Rotta API per l'Interpretazione del Sogno e Cabala Separata
+# 7. Rotta API per l'Interpretazione del Sogno e Cabala (Unica chiamata Gemini)
 @app.route('/api/interpreta-sogno', methods=['POST'])
 def interpreta_sogno():
     try:
@@ -196,28 +196,31 @@ def interpreta_sogno():
 
         estrazioni_50 = scarica_ultime_estrazioni()
 
-        prompt_interpretazione = (
-            f"Agisci come un esperto di analisi onirica e psicodinamica.\n"
+        prompt_combinato = (
+            f"Agisci come un esperto di analisi onirica, psicodinamica e di cabala napoletana.\n"
             f"Utente: {profilo.get('sesso')}, {profilo.get('eta')} anni, Condizione: {profilo.get('condizione')}, "
             f"Titolo di studio: {titolo_studio}, Lavoro: {profilo.get('tipo_lavoro')}, Hobby: {profilo.get('hobby')}.\n"
             f"{istruzioni_linguaggio}\n\n"
             f"Cena: {pasto}, Sostanze/Alcol: {sostanze}, Contesto: {contesto_recente}.\n"
-            f"Stato iniziale: {stato_iniziale} ➔ Sogno: \"{racconto_sogno}\" ➔ Stato finale: {stato_finale}.\n\n"
-            f"Fornisci un'interpretazione profonda e saggia del significato del sogno."
+            f"Stato iniziale: {stato_iniziale} ➔ Sogno: \"{racconto_sogno}\" ➔ Stato finale: {stato_finale}.\n"
+            f"Storico ultime estrazioni lotto:\n{estrazioni_50}\n\n"
+            f"Fornisci la risposta strutturata esattamente in questo modo:\n"
+            f"---INTERPRETAZIONE---\n"
+            f"[Scrivi qui un'interpretazione profonda e saggia del significato del sogno]\n\n"
+            f"---CABALA---\n"
+            f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        resp_interp = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_interpretazione)
-        interpretazione = resp_interp.text
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
+        testo_totale = response.text
 
-        prompt_cabala = (
-            f"Agisci come un esperto di cabala napoletana e teoria delle probabilità sul lotto.\n"
-            f"Analizza questo sogno: \"{racconto_sogno}\".\n"
-            f"Storico ultime estrazioni:\n{estrazioni_50}\n\n"
-            f"Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata."
-        )
-
-        resp_cabala = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_cabala)
-        cabala = resp_cabala.text
+        interpretazione = testo_totale
+        cabala = "Numeri e cabala elaborati dal sogno."
+        
+        if "---CABALA---" in testo_totale:
+            parti = testo_totale.split("---CABALA---")
+            interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
+            cabala = parti[1].strip()
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
