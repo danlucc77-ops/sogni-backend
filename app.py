@@ -65,16 +65,16 @@ try:
 except Exception as e:
     print(f"Errore nell'inizializzazione di Gemini: {e}")
 
-# 3. Funzione per il Web Scraping delle ultime 50 estrazioni del Lotto
+# 3. Funzione alleggerita per il Web Scraping (Ridotto a 2000 caratteri per risparmiare RAM)
 def scarica_ultime_estrazioni():
     try:
         url = "https://www.totoproject.com/giochi/lotto_stat_u50.asp"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=6)
+        response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             testo_archivio = soup.get_text(separator=' | ', strip=True)
-            return testo_archivio[:8000]
+            return testo_archivio[:2000]
     except Exception as e:
         print(f"Errore recupero archivio 50 estrazioni: {e}")
     return "Archivio delle ultime 50 estrazioni non disponibile temporaneamente."
@@ -215,8 +215,8 @@ def interpreta_sogno():
         prompt_cabala = (
             f"Agisci come un esperto di cabala napoletana e teoria delle probabilità sul lotto.\n"
             f"Analizza questo sogno: \"{racconto_sogno}\".\n"
-            f"Storico ultime 50 estrazioni:\n{estrazioni_50}\n\n"
-            f"Estrai i simboli chiave, convertili nei numeri della Smorfia, calcola frequenze/ritardi e suggerisci una previsione mirata (Ruote, Ambo, Terno)."
+            f"Storico ultime estrazioni:\n{estrazioni_50}\n\n"
+            f"Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata."
         )
 
         resp_cabala = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_cabala)
@@ -248,19 +248,16 @@ def consigli_personalizzati():
 
         prompt = (
             f"Agisci come un medico del sonno e uno psicologo clinico esperto in igiene del sonno.\n"
-            f"Genera 4 consigli personalizzati per il sonno e il benessere psicofisico basati rigorosamente sul profilo di questo utente:\n"
+            f"Genera 4 consigli personalizzati per il sonno basati sul profilo:\n"
             f"- Nome: {profilo.get('nome')}, Sesso: {profilo.get('sesso')}, Età: {profilo.get('eta')}\n"
-            f"- Condizione: {profilo.get('condizione')}, Lavoro: {profilo.get('tipo_lavoro')}, Titolo di studio: {profilo.get('titolo_studio')}\n"
-            f"- Hobby/Sport: {profilo.get('hobby')}\n"
-            f"- Eventi traumatici / Stress: {profilo.get('traumi')}\n"
-            f"- Medicinali assunti: {profilo.get('medicinali')}\n\n"
-            f"Fornisci consigli pratici, empatici e mirati, strutturati con un titolo chiaro e una spiegazione dettagliata per ciascuno."
+            f"- Condizione: {profilo.get('condizione')}, Lavoro: {profilo.get('tipo_lavoro')}\n"
+            f"Fornisci consigli pratici ed empatici."
         )
 
         response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "consigli": response.text}), 200
     except Exception as e:
-        return jsonify({"status": "error", "consigli": f"Errore: {str(e)}", "cabala": ""}), 200
+        return jsonify({"status": "error", "consigli": f"Errore: {str(e)}"}), 200
 
 # 9. Rotta API per l'Analisi Periodica del Diario
 @app.route('/api/analisi-periodica', methods=['POST'])
@@ -273,16 +270,13 @@ def analisi_periodica():
         if not sogni:
             return jsonify({"status": "success", "analisi": "Nessun sogno registrato."}), 200
         
-        storico_testo = "".join([f"\n- Sogno ({s.get('data')}): {s.get('racconto')} | Interpretazione: {s.get('interpretazione')}" for s in sogni])
-        titolo_studio = profilo.get('titolo_studio', '').strip()
-        istruzioni_linguaggio = f"Adatta il registro linguistico al titolo di studio: '{titolo_studio}'." if titolo_studio else "Usa un linguaggio semplice e diretto."
-
-        prompt = f"Analizza l'archivio dei sogni di {profilo.get('nome')} come un unico flusso di coscienza:\n{storico_testo}\n{istruzioni_linguaggio}\nFornisci una sintesi ciclica."
-        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
+        storico_testo = "".join([f"\n- Sogno: {s.get('racconto')[:100]}..." for s in sogni[-10:]])
+        prompt = f"Analizza la tendenza dei sogni recenti di {profilo.get('nome')}:\n{storico_testo}\nFornisci una sintesi."
         
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
-        return jsonify({"status": "error", "analisi": f"Errore: {str(e)}", "analisi": ""}), 200
+        return jsonify({"status": "error", "analisi": f"Errore: {str(e)}"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
