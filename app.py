@@ -170,7 +170,7 @@ def aggiorna_profilo():
     finally:
         conn.close()
 
-# 7. Rotta API per l'Interpretazione del Sogno e Cabala (Gemini 2.0 Flash)
+# 7. Rotta API per l'Interpretazione del Sogno e Cabala
 @app.route('/api/interpreta-sogno', methods=['POST'])
 def interpreta_sogno():
     try:
@@ -211,7 +211,7 @@ def interpreta_sogno():
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt_combinato)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
         testo_totale = response.text
 
         interpretazione = testo_totale
@@ -236,7 +236,7 @@ def interpreta_sogno():
     except Exception as e:
         return jsonify({"status": "error", "interpretazione": f"Errore interno: {str(e)}", "cabala": ""}), 200
 
-# 8. Rotta API per i Consigli sul Sonno Personalizzati (Gemini 2.0 Flash)
+# 8. Rotta API per i Consigli sul Sonno Personalizzati
 @app.route('/api/consigli-personalizzati', methods=['POST'])
 def consigli_personalizzati():
     try:
@@ -262,7 +262,7 @@ def consigli_personalizzati():
             f"Fornisci consigli pratici ed empatici formattati chiaramente."
         )
 
-        response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         testo_consigli = response.text if response and hasattr(response, 'text') else "Impossibile generare i consigli al momento."
         
         return jsonify({"status": "success", "success": True, "consigli": testo_consigli}), 200
@@ -270,7 +270,7 @@ def consigli_personalizzati():
         print(f"Errore consigli personalizzati: {e}")
         return jsonify({"status": "success", "success": True, "consigli": f"Errore tecnico: {str(e)}"}), 200
 
-# 9. Rotta API per l'Analisi Periodica del Diario (Gemini 2.0 Flash)
+# 9. Rotta API per l'Analisi Periodica del Diario
 @app.route('/api/analisi-periodica', methods=['POST'])
 def analisi_periodica():
     try:
@@ -284,7 +284,7 @@ def analisi_periodica():
         storico_testo = "".join([f"\n- Sogno: {s.get('racconto')[:100]}..." for s in sogni[-10:]])
         prompt = f"Analizza la tendenza dei sogni recenti di {profilo.get('nome')}:\n{storico_testo}\nFornisci una sintesi."
         
-        response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
         return jsonify({"status": "success", "analisi": f"Errore: {str(e)}"}), 200
