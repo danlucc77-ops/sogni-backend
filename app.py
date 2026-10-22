@@ -1,7 +1,6 @@
 import threading
 import sqlite3
 import requests
-from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from google import genai
@@ -65,19 +64,17 @@ try:
 except Exception as e:
     print(f"Errore nell'inizializzazione di Gemini: {e}")
 
-# 3. Funzione alleggerita per il Web Scraping (Ridotto a 2000 caratteri per risparmiare RAM)
+# 3. Funzione ultraleggera (zero consumo di RAM)
 def scarica_ultime_estrazioni():
     try:
         url = "https://www.totoproject.com/giochi/lotto_stat_u50.asp"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=3)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            testo_archivio = soup.get_text(separator=' | ', strip=True)
-            return testo_archivio[:2000]
+            return response.text[:1000]
     except Exception as e:
-        print(f"Errore recupero archivio 50 estrazioni: {e}")
-    return "Archivio delle ultime 50 estrazioni non disponibile temporaneamente."
+        print(f"Errore recupero archivio: {e}")
+    return "Archivio estrazioni non disponibile temporaneamente."
 
 # 4. Rotta API per la Registrazione Utente
 @app.route('/api/registra', methods=['POST'])
