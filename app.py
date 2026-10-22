@@ -214,7 +214,7 @@ def interpreta_sogno():
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_combinato)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
         testo_totale = response.text
 
         interpretazione = testo_totale
@@ -245,7 +245,7 @@ def modifica_sogno():
     try:
         data = request.json
         sogno_id = data.get('id')
-        nome_utente = data.get('nome_utente')  # Opzionale o ricavabile
+        nome_utente = data.get('nome_utente')
         
         racconto = data.get('racconto', '')
         contesto = data.get('contesto', 'Nessuno specificato')
@@ -278,7 +278,7 @@ def modifica_sogno():
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_combinato)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
         testo_totale = response.text
 
         interpretazione = testo_totale
@@ -293,7 +293,6 @@ def modifica_sogno():
         cursor = conn.cursor()
 
         if sogno_id:
-            # Aggiorna il sogno esistente rigenerando interpretazione e cabala con Gemini
             cursor.execute('''
                 UPDATE sogni SET 
                     contesto = ?, pasto = ?, sostanze = ?, 
@@ -306,7 +305,6 @@ def modifica_sogno():
                 interpretazione, cabala, sogno_id
             ))
         else:
-            # Se l'ID non è presente (es. salvataggio bozza offline convertita), inserisce un nuovo record
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala)
                 VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
@@ -324,7 +322,7 @@ def modifica_sogno():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# 9. Rotta API per i Consigli sul Sonno Personalizzati (Blindata con Fallback)
+# 9. Rotta API per i Consigli sul Sonno Personalizzati
 @app.route('/api/consigli-personalizzati', methods=['POST'])
 def consigli_personalizzati():
     try:
@@ -354,7 +352,7 @@ def consigli_personalizzati():
         )
 
         if client:
-            response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+            response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
             if response and hasattr(response, 'text') and response.text:
                 return jsonify({"status": "success", "success": True, "consigli": response.text}), 200
 
@@ -392,7 +390,7 @@ def analisi_periodica():
         prompt = f"Analizza la tendenza dei sogni recenti di {profilo.get('nome')}:\n{storico_testo}\nFornisci una sintesi."
         
         global client
-        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
         return jsonify({"status": "success", "analisi": f"Errore: {str(e)}", "success": True}), 200
