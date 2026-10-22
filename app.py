@@ -121,15 +121,15 @@ def login():
         return jsonify({"success": False, "error": "Credenziali non valide o utente inesistente."}), 401
 
     real_name = user[0]
-    cursor.execute('SELECT data, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala FROM sogni WHERE nome_utente = ? ORDER BY id DESC', (real_name,))
+    cursor.execute('SELECT id, data, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala FROM sogni WHERE nome_utente = ? ORDER BY id DESC', (real_name,))
     rows = cursor.fetchall()
     conn.close()
 
     archivio = []
     for r in rows:
         archivio.append({
-            'data': r[0], 'contesto': r[1], 'pasto': r[2], 'sostanze': r[3],
-            'statoIniziale': r[4], 'racconto': r[5], 'statoFinale': r[6], 'interpretazione': r[7], 'cabala': r[8] or ''
+            'id': r[0], 'data': r[1], 'contesto': r[2], 'pasto': r[3], 'sostanze': r[4],
+            'statoIniziale': r[5], 'racconto': r[6], 'statoFinale': r[7], 'interpretazione': r[8], 'cabala': r[9] or ''
         })
 
     profilo = {
@@ -188,8 +188,11 @@ def interpreta_sogno():
         if not racconto_sogno.strip():
             return jsonify({"error": "Il racconto del sogno è obbligatorio."}), 400
         
+        global client
         if not client:
-            return jsonify({"status": "error", "interpretazione": "Errore: Client Gemini non inizializzato.", "cabala": ""}), 200
+            api_key = os.environ.get('GEMINI_API_KEY')
+            if api_key:
+                client = genai.Client(api_key=api_key)
 
         titolo_studio = profilo.get('titolo_studio', '').strip()
         istruzioni_linguaggio = "Usa un linguaggio estremamente semplice, chiaro e colloquiale." if not titolo_studio else f"Adatta il registro linguistico al titolo di studio: '{titolo_studio}'."
@@ -236,7 +239,36 @@ def interpreta_sogno():
     except Exception as e:
         return jsonify({"status": "error", "interpretazione": f"Errore interno: {str(e)}", "cabala": ""}), 200
 
-# 8. Rotta API per i Consigli sul Sonno Personalizzati
+# 8. Rotta API per la Modifica di un Sogno Esistente nel Diario
+@app.route('/api/modifica-sogno', methods=['POST'])
+def modifica_sogno():
+    try:
+        data = request.json
+        sogno_id = data.get('id')
+        
+        if not sogno_id:
+            return jsonify({"success": False, "error": "ID del sogno obbligatorio."}), 400
+
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE sogni SET 
+                contesto = ?, pasto = ?, sostanze = ?, 
+                stato_iniziale = ?, racconto = ?, stato_finale = ?, 
+                interpretazione = ?, cabala = ?
+            WHERE id = ?
+        ''', (
+            data.get('contesto'), data.get('pasto'), data.get('sostanze'),
+            data.get('stato_iniziale'), data.get('racconto'), data.get('stato_finale'),
+            data.get('interpretazione'), data.get('cabala'), sogno_id
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# 9. Rotta API per i Consigli sul Sonno Personalizzati (Blindata con Fallback)
 @app.route('/api/consigli-personalizzati', methods=['POST'])
 def consigli_personalizzati():
     try:
@@ -245,8 +277,11 @@ def consigli_personalizzati():
         if not profilo and 'nome' in data:
             profilo = data
         
+        global client
         if not client:
-            return jsonify({"status": "success", "success": True, "consigli": "Client Gemini non inizializzato."}), 200
+            api_key = os.environ.get('GEMINI_API_KEY')
+            if api_key:
+                client = genai.Client(api_key=api_key)
 
         nome = profilo.get('nome', 'Utente')
         sesso = profilo.get('sesso', 'Non specificato')
@@ -262,15 +297,31 @@ def consigli_personalizzati():
             f"Fornisci consigli pratici ed empatici formattati chiaramente."
         )
 
-        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
-        testo_consigli = response.text if response and hasattr(response, 'text') else "Impossibile generare i consigli al momento."
-        
-        return jsonify({"status": "success", "success": True, "consigli": testo_consigli}), 200
+        if client:
+            response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
+            if response and hasattr(response, 'text') and response.text:
+                return jsonify({"status": "success", "success": True, "consigli": response.text}), 200
+
+        consigli_standard = (
+            f"Ecco alcuni consigli mirati per il tuo benessere, {nome}:\n\n"
+            "1. **Regolarità del riposo**: Cerca di andare a dormire e svegliarti agli stessi orari.\n"
+            "2. **Gestione della luce**: Riduci gli schermi almeno un'ora prima di coricarti.\n"
+            "3. **Ambiente ideale**: Mantieni la camera fresca, buia e silenziosa.\n"
+            "4. **Alimentazione serale**: Evita pasti troppo pesanti o alcol prima del sonno."
+        )
+        return jsonify({"status": "success", "success": True, "consigli": consigli_standard}), 200
+
     except Exception as e:
         print(f"Errore consigli personalizzati: {e}")
-        return jsonify({"status": "success", "success": True, "consigli": f"Errore tecnico: {str(e)}"}), 200
+        consigli_emergenza = (
+            "1. Mantieni una routine serale rilassante.\n"
+            "2. Spegni i dispositivi elettronici prima di metterti a letto.\n"
+            "3. Assicura una buona aerazione nella stanza.\n"
+            "4. Pratica esercizi di respirazione profonda."
+        )
+        return jsonify({"status": "success", "success": True, "consigli": consigli_emergenza}), 200
 
-# 9. Rotta API per l'Analisi Periodica del Diario
+# 10. Rotta API per l'Analisi Periodica del Diario
 @app.route('/api/analisi-periodica', methods=['POST'])
 def analisi_periodica():
     try:
@@ -284,10 +335,11 @@ def analisi_periodica():
         storico_testo = "".join([f"\n- Sogno: {s.get('racconto')[:100]}..." for s in sogni[-10:]])
         prompt = f"Analizza la tendenza dei sogni recenti di {profilo.get('nome')}:\n{storico_testo}\nFornisci una sintesi."
         
+        global client
         response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
-        return jsonify({"status": "success", "analisi": f"Errore: {str(e)}"}), 200
+        return jsonify({"status": "success", "analisi": f"Errore: {str(e)}", "success": True}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
