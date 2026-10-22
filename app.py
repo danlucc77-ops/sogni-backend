@@ -214,7 +214,7 @@ def interpreta_sogno():
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_combinato)
         testo_totale = response.text
 
         interpretazione = testo_totale
@@ -239,32 +239,88 @@ def interpreta_sogno():
     except Exception as e:
         return jsonify({"status": "error", "interpretazione": f"Errore interno: {str(e)}", "cabala": ""}), 200
 
-# 8. Rotta API per la Modifica di un Sogno Esistente nel Diario
+# 8. Rotta API per la Modifica di un Sogno Esistente nel Diario (Rigenera con Gemini)
 @app.route('/api/modifica-sogno', methods=['POST'])
 def modifica_sogno():
     try:
         data = request.json
         sogno_id = data.get('id')
+        nome_utente = data.get('nome_utente')  # Opzionale o ricavabile
         
-        if not sogno_id:
-            return jsonify({"success": False, "error": "ID del sogno obbligatorio."}), 400
+        racconto = data.get('racconto', '')
+        contesto = data.get('contesto', 'Nessuno specificato')
+        pasto = data.get('pasto', 'Non specificato')
+        sostanze = data.get('sostanze', 'Nessuna')
+        stato_iniziale = data.get('stato_iniziale', 'Non specificato')
+        stato_finale = data.get('stato_finale', 'Non specificato')
+        
+        if not racconto.strip():
+            return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
+
+        global client
+        if not client:
+            api_key = os.environ.get('GEMINI_API_KEY')
+            if api_key:
+                client = genai.Client(api_key=api_key)
+
+        estrazioni_50 = scarica_ultime_estrazioni()
+
+        prompt_combinato = (
+            f"Agisci come un esperto di analisi onirica, psicodinamica e di cabala napoletana.\n"
+            f"Analizza questo sogno aggiornato/modificato dall'utente:\n"
+            f"Cena: {pasto}, Sostanze/Alcol: {sostanze}, Contesto: {contesto}.\n"
+            f"Stato iniziale: {stato_iniziale} ➔ Sogno: \"{racconto}\" ➔ Stato finale: {stato_finale}.\n"
+            f"Storico ultime estrazioni lotto:\n{estrazioni_50}\n\n"
+            f"Fornisci la risposta strutturata esattamente in questo modo:\n"
+            f"---INTERPRETAZIONE---\n"
+            f"[Scrivi qui un'interpretazione profonda e saggia del significato aggiornato del sogno]\n\n"
+            f"---CABALA---\n"
+            f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
+        )
+
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_combinato)
+        testo_totale = response.text
+
+        interpretazione = testo_totale
+        cabala = "Numeri e cabala elaborati dal sogno."
+        
+        if "---CABALA---" in testo_totale:
+            parti = testo_totale.split("---CABALA---")
+            interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
+            cabala = parti[1].strip()
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE sogni SET 
-                contesto = ?, pasto = ?, sostanze = ?, 
-                stato_iniziale = ?, racconto = ?, stato_finale = ?, 
-                interpretazione = ?, cabala = ?
-            WHERE id = ?
-        ''', (
-            data.get('contesto'), data.get('pasto'), data.get('sostanze'),
-            data.get('stato_iniziale'), data.get('racconto'), data.get('stato_finale'),
-            data.get('interpretazione'), data.get('cabala'), sogno_id
-        ))
+
+        if sogno_id:
+            # Aggiorna il sogno esistente rigenerando interpretazione e cabala con Gemini
+            cursor.execute('''
+                UPDATE sogni SET 
+                    contesto = ?, pasto = ?, sostanze = ?, 
+                    stato_iniziale = ?, racconto = ?, stato_finale = ?, 
+                    interpretazione = ?, cabala = ?
+                WHERE id = ?
+            ''', (
+                contesto, pasto, sostanze,
+                stato_iniziale, racconto, stato_finale,
+                interpretazione, cabala, sogno_id
+            ))
+        else:
+            # Se l'ID non è presente (es. salvataggio bozza offline convertita), inserisce un nuovo record
+            cursor.execute('''
+                INSERT INTO sogni (nome_utente, data, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala)
+                VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (nome_utente, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala))
+
         conn.commit()
         conn.close()
-        return jsonify({"success": True}), 200
+
+        return jsonify({
+            "success": True, 
+            "interpretazione": interpretazione, 
+            "cabala": cabala
+        }), 200
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -298,7 +354,7 @@ def consigli_personalizzati():
         )
 
         if client:
-            response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
+            response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
             if response and hasattr(response, 'text') and response.text:
                 return jsonify({"status": "success", "success": True, "consigli": response.text}), 200
 
@@ -336,7 +392,7 @@ def analisi_periodica():
         prompt = f"Analizza la tendenza dei sogni recenti di {profilo.get('nome')}:\n{storico_testo}\nFornisci una sintesi."
         
         global client
-        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
         return jsonify({"status": "success", "analisi": f"Errore: {str(e)}", "success": True}), 200
