@@ -209,7 +209,7 @@ def interpreta_sogno():
             f"Fornisci un'interpretazione profonda e saggia del significato del sogno."
         )
 
-        resp_interp = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_interpretazione)
+        resp_interp = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_interpretazione)
         interpretazione = resp_interp.text
 
         prompt_cabala = (
@@ -219,7 +219,7 @@ def interpreta_sogno():
             f"Estrai i simboli chiave, convertili nei numeri della Smorfia, calcola frequenze/ritardi e suggerisci una previsione mirata (Ruote, Ambo, Terno)."
         )
 
-        resp_cabala = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_cabala)
+        resp_cabala = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_cabala)
         cabala = resp_cabala.text
 
         conn = sqlite3.connect(DB_NAME)
@@ -257,7 +257,7 @@ def consigli_personalizzati():
             f"Fornisci consigli pratici, empatici e mirati, strutturati con un titolo chiaro e una spiegazione dettagliata per ciascuno."
         )
 
-        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         return jsonify({"status": "success", "consigli": response.text}), 200
     except Exception as e:
         return jsonify({"status": "error", "consigli": f"Errore: {str(e)}", "cabala": ""}), 200
@@ -278,11 +278,11 @@ def analisi_periodica():
         istruzioni_linguaggio = f"Adatta il registro linguistico al titolo di studio: '{titolo_studio}'." if titolo_studio else "Usa un linguaggio semplice e diretto."
 
         prompt = f"Analizza l'archivio dei sogni di {profilo.get('nome')} come un unico flusso di coscienza:\n{storico_testo}\n{istruzioni_linguaggio}\nFornisci una sintesi ciclica."
-        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt)
         
         return jsonify({"status": "success", "analisi": response.text}), 200
     except Exception as e:
-        return jsonify({"status": "error", "analisi": f"Errore: {str(e)}"}), 200
+        return jsonify({"status": "error", "analisi": f"Errore: {str(e)}", "analisi": ""}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
