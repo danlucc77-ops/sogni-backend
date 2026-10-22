@@ -11,7 +11,6 @@ CORS(app)
 
 DB_NAME = "utenti_sogni_server.db"
 
-# 1. Inizializzazione del Database SQLite
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -52,7 +51,6 @@ def init_db():
 
 init_db()
 
-# 2. Configurazione e Inizializzazione del Client Gemini
 client = None
 try:
     api_key = os.environ.get('GEMINI_API_KEY')
@@ -64,7 +62,6 @@ try:
 except Exception as e:
     print(f"Errore nell'inizializzazione di Gemini: {e}")
 
-# 3. Funzione ultraleggera per il recupero delle estrazioni (zero RAM)
 def scarica_ultime_estrazioni():
     try:
         url = "https://www.totoproject.com/giochi/lotto_stat_u50.asp"
@@ -76,7 +73,6 @@ def scarica_ultime_estrazioni():
         print(f"Errore recupero archivio: {e}")
     return "Archivio estrazioni non disponibile temporaneamente."
 
-# 4. Rotta API per la Registrazione Utente
 @app.route('/api/registra', methods=['POST'])
 def registra():
     data = request.json
@@ -104,7 +100,6 @@ def registra():
     finally:
         conn.close()
 
-# 5. Rotta API per il Login (Case-Insensitive)
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
@@ -140,7 +135,6 @@ def login():
 
     return jsonify({"success": True, "profilo": profilo, "archivio": archivio}), 200
 
-# 6. Rotta API per l'Aggiornamento del Profilo
 @app.route('/api/aggiorna-profilo', methods=['POST'])
 def aggiorna_profilo():
     data = request.json
@@ -170,7 +164,6 @@ def aggiorna_profilo():
     finally:
         conn.close()
 
-# 7. Rotta API per l'Interpretazione del Sogno e Cabala
 @app.route('/api/interpreta-sogno', methods=['POST'])
 def interpreta_sogno():
     try:
@@ -195,12 +188,12 @@ def interpreta_sogno():
                 client = genai.Client(api_key=api_key)
 
         titolo_studio = profilo.get('titolo_studio', '').strip()
-        istruzioni_linguaggio = "Usa un linguaggio estremamente semplice, chiaro e colloquiale." if not titolo_studio else f"Adatta il registro linguistico al titolo di studio: '{titolo_studio}'."
+        istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta rigorosamente il registro linguistico, la profondità psicologica e i riferimenti analitici al titolo di studio dell'utente: '{titolo_studio}' (es. laurea/specializzazione)."
 
         estrazioni_50 = scarica_ultime_estrazioni()
 
         prompt_combinato = (
-            f"Agisci come un esperto di analisi onirica, psicodinamica e di cabala napoletana.\n"
+            f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
             f"Utente: {profilo.get('sesso')}, {profilo.get('eta')} anni, Condizione: {profilo.get('condizione')}, "
             f"Titolo di studio: {titolo_studio}, Lavoro: {profilo.get('tipo_lavoro')}, Hobby: {profilo.get('hobby')}.\n"
             f"{istruzioni_linguaggio}\n\n"
@@ -209,7 +202,7 @@ def interpreta_sogno():
             f"Storico ultime estrazioni lotto:\n{estrazioni_50}\n\n"
             f"Fornisci la risposta strutturata esattamente in questo modo:\n"
             f"---INTERPRETAZIONE---\n"
-            f"[Scrivi qui un'interpretazione profonda e saggia del significato del sogno]\n\n"
+            f"[Scrivi qui un'interpretazione psicologica profonda, complessa e strutturata, adeguata al profilo di studi dell'utente]\n\n"
             f"---CABALA---\n"
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
@@ -239,14 +232,11 @@ def interpreta_sogno():
     except Exception as e:
         return jsonify({"status": "error", "interpretazione": f"Errore interno: {str(e)}", "cabala": ""}), 200
 
-# 8. Rotta API per la Modifica di un Sogno Esistente nel Diario (Rigenera con Gemini)
 @app.route('/api/modifica-sogno', methods=['POST'])
 def modifica_sogno():
     try:
         data = request.json
         sogno_id = data.get('id')
-        nome_utente = data.get('nome_utente')
-        
         racconto = data.get('racconto', '')
         contesto = data.get('contesto', 'Nessuno specificato')
         pasto = data.get('pasto', 'Non specificato')
@@ -254,8 +244,26 @@ def modifica_sogno():
         stato_iniziale = data.get('stato_iniziale', 'Non specificato')
         stato_finale = data.get('stato_finale', 'Non specificato')
         
-        if not racconto.strip():
-            return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
+        if not sogno_id or not racconto.strip():
+            return jsonify({"success": False, "error": "ID del sogno e racconto sono obbligatori."}), 400
+
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        
+        # Recupera il profilo utente associato al sogno per mantenere la coerenza del titolo di studio
+        cursor.execute('SELECT nome_utente FROM sogni WHERE id = ?', (sogno_id,))
+        row = cursor.fetchone()
+        nome_utente = row[0] if row else None
+        
+        profilo = {}
+        if nome_utente:
+            cursor.execute('SELECT * FROM utenti WHERE nome = ?', (nome_utente,))
+            user = cursor.fetchone()
+            if user:
+                profilo = {
+                    'nome': user[0], 'sesso': user[2], 'eta': user[3], 'condizione': user[4],
+                    'titolo_studio': user[5], 'tipo_lavoro': user[6], 'hobby': user[7]
+                }
 
         global client
         if not client:
@@ -263,17 +271,23 @@ def modifica_sogno():
             if api_key:
                 client = genai.Client(api_key=api_key)
 
+        titolo_studio = profilo.get('titolo_studio', '').strip()
+        istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta rigorosamente il registro linguistico, la profondità psicologica e i riferimenti analitici al titolo di studio dell'utente: '{titolo_studio}' (es. laurea/specializzazione)."
+
         estrazioni_50 = scarica_ultime_estrazioni()
 
         prompt_combinato = (
-            f"Agisci come un esperto di analisi onirica, psicodinamica e di cabala napoletana.\n"
-            f"Analizza questo sogno aggiornato/modificato dall'utente:\n"
+            f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
+            f"Analizza questo sogno aggiornato/modificato:\n"
+            f"Utente: {profilo.get('sesso', 'Utente')}, {profilo.get('eta', '')} anni, Condizione: {profilo.get('condizione', '')}, "
+            f"Titolo di studio: {titolo_studio}, Lavoro: {profilo.get('tipo_lavoro', '')}.\n"
+            f"{istruzioni_linguaggio}\n\n"
             f"Cena: {pasto}, Sostanze/Alcol: {sostanze}, Contesto: {contesto}.\n"
-            f"Stato iniziale: {stato_iniziale} ➔ Sogno: \"{racconto}\" ➔ Stato finale: {stato_finale}.\n"
+            f"Stato iniziale: {stato_iniziale} ➔ Sogno aggiornato: \"{racconto}\" ➔ Stato finale: {stato_finale}.\n"
             f"Storico ultime estrazioni lotto:\n{estrazioni_50}\n\n"
             f"Fornisci la risposta strutturata esattamente in questo modo:\n"
             f"---INTERPRETAZIONE---\n"
-            f"[Scrivi qui un'interpretazione profonda e saggia del significato aggiornato del sogno]\n\n"
+            f"[Scrivi qui un'interpretazione psicologica profonda, complessa e strutturata, adeguata al profilo di studi dell'utente]\n\n"
             f"---CABALA---\n"
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
@@ -289,27 +303,17 @@ def modifica_sogno():
             interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
             cabala = parti[1].strip()
 
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-
-        if sogno_id:
-            cursor.execute('''
-                UPDATE sogni SET 
-                    contesto = ?, pasto = ?, sostanze = ?, 
-                    stato_iniziale = ?, racconto = ?, stato_finale = ?, 
-                    interpretazione = ?, cabala = ?
-                WHERE id = ?
-            ''', (
-                contesto, pasto, sostanze,
-                stato_iniziale, racconto, stato_finale,
-                interpretazione, cabala, sogno_id
-            ))
-        else:
-            cursor.execute('''
-                INSERT INTO sogni (nome_utente, data, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala)
-                VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (nome_utente, contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala))
-
+        cursor.execute('''
+            UPDATE sogni SET 
+                contesto = ?, pasto = ?, sostanze = ?, 
+                stato_iniziale = ?, racconto = ?, stato_finale = ?, 
+                interpretazione = ?, cabala = ?
+            WHERE id = ?
+        ''', (
+            contesto, pasto, sostanze,
+            stato_iniziale, racconto, stato_finale,
+            interpretazione, cabala, sogno_id
+        ))
         conn.commit()
         conn.close()
 
@@ -322,7 +326,6 @@ def modifica_sogno():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# 9. Rotta API per i Consigli sul Sonno Personalizzati
 @app.route('/api/consigli-personalizzati', methods=['POST'])
 def consigli_personalizzati():
     try:
@@ -375,7 +378,6 @@ def consigli_personalizzati():
         )
         return jsonify({"status": "success", "success": True, "consigli": consigli_emergenza}), 200
 
-# 10. Rotta API per l'Analisi Periodica del Diario
 @app.route('/api/analisi-periodica', methods=['POST'])
 def analisi_periodica():
     try:
