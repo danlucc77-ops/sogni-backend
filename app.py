@@ -304,7 +304,7 @@ def modifica_sogno():
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        risposta = cliente.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
+        risposta = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
         testo_totale = risposta.text
 
         interpretazione = testo_totale
