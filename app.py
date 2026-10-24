@@ -233,6 +233,7 @@ def interpreta_sogno():
         return jsonify({"status": "error", "interpretazione": f"Errore interno: {str(e)}", "cabala": ""}), 200
 
 @app.route('/api/modifica-sogno', methods=['POST'])
+@app.route('/api/modifica-sogno', methods=['POST'])
 def modifica_sogno():
     try:
         dati = request.json
@@ -250,15 +251,21 @@ def modifica_sogno():
         conn = sqlite3.connect(NOME_DATA)
         cursor = conn.cursor()
 
-        # Se riceviamo un id valido, cerchiamo l'utente associato, altrimenti usiamo la sessione o un default
+        # Se abbiamo un ID, recuperiamo il nome utente e la data originale del sogno
+        data_originale = None
+        nome_utente = None
         if sogno_id is not None:
-            cursor.execute('SELECT nome_utente FROM sogni WHERE id = ?', (sogno_id,))
+            sogno_id = int(sogno_id)
+            cursor.execute('SELECT nome_utente, data FROM sogni WHERE id = ?', (sogno_id,))
             riga = cursor.fetchone()
-            nome_utente = riga[0] if riga else None
-        else:
+            if riga:
+                nome_utente = riga[0]
+                data_originale = riga[1] # Mantiene la data e l'ora originarie intatte!
+
+        if not nome_utente:
             nome_utente = session.get('nome_utente')
 
-        # Recupera il profilo utente
+        # Recupera il profilo utente per l'IA
         profilo = {}
         if nome_utente:
             cursor.execute('SELECT * FROM utenti WHERE nome = ?', (nome_utente,))
@@ -309,7 +316,7 @@ def modifica_sogno():
             cabala = parti[1].strip()
 
         if sogno_id is None:
-            # SOGNO AL VOLO: Inserisce un nuovo record nel database (INSERT)
+            # 1. NUOVO SOGNO / BOZZA AL VOLO: Inserisce con la data e l'ora attuali
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
                 VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
@@ -317,27 +324,20 @@ def modifica_sogno():
             conn.commit()
             nuovo_id = cursor.lastrowid
             conn.close()
-            return jsonify({
-                "success": True,
-                "id": nuovo_id,
-                "interpretazione": interpretazione,
-                "cabala": cabala
-            }), 200
+            return jsonify({"success": True, "id": nuovo_id, "interpretazione": interpretazione, "cabala": cabala}), 200
         else:
-            # SOGNO ESISTENTE: Aggiorna il record esistente (UPDATE)
+            # 2. MODIFICA DI UN SOGNO ESISTENTE: Elimina il vecchio e inserisce il nuovo preservando la data originaria!
+            cursor.execute('DELETE FROM sogni WHERE id = ?', (sogno_id,))
+            
             cursor.execute('''
-                UPDATE sogni 
-                SET contesto = ?, pasto = ?, sostanze = ?, stato_iniziale = ?, racconto = ?, stato_finale = ?, interpretazione = ?, cabala = ?
-                WHERE id = ?
-            ''', (contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala, sogno_id))
+                INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (nome_utente, data_originale, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
+            
             conn.commit()
+            nuovo_id = cursor.lastrowid
             conn.close()
-            return jsonify({
-                "success": True,
-                "id": sogno_id,
-                "interpretazione": interpretazione,
-                "cabala": cabala
-            }), 200
+            return jsonify({"success": True, "id": nuovo_id, "interpretazione": interpretazione, "cabala": cabala}), 200
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
