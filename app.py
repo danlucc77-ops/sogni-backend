@@ -315,29 +315,40 @@ def modifica_sogno():
             interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
             cabala = parti[1].strip()
 
-        if sogno_id is None:
-            # 1. NUOVO SOGNO / BOZZA AL VOLO: Inserisce con la data e l'ora attuali
+       # Verifica se l'ID esiste effettivamente nel database SQLite
+        esiste = False
+        if sogno_id is not None:
+            try:
+                cursor.execute("SELECT id FROM sogni WHERE id = ?", (int(sogno_id),))
+                esiste = cursor.fetchone() is not None
+            except:
+                esiste = False
+
+        if not esiste:
+            # 1. NUOVO SOGNO / BOZZA AL VOLO (o ID temporaneo inesistente nel DB): Inserisce con data e ora attuali
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
                 VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (nome_utente, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
-            conn.commit()
             nuovo_id = cursor.lastrowid
-            conn.close()
-            return jsonify({"success": True, "id": nuovo_id, "interpretazione": interpretazione, "cabala": cabala}), 200
         else:
             # 2. MODIFICA DI UN SOGNO ESISTENTE: Elimina il vecchio e inserisce il nuovo preservando la data originaria!
-            cursor.execute('DELETE FROM sogni WHERE id = ?', (sogno_id,))
-            
+            cursor.execute('DELETE FROM sogni WHERE id = ?', (int(sogno_id),))
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (nome_utente, data_originale, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
-            
-            conn.commit()
             nuovo_id = cursor.lastrowid
-            conn.close()
-            return jsonify({"success": True, "id": nuovo_id, "interpretazione": interpretazione, "cabala": cabala}), 200
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "success": True, 
+            "id": nuovo_id, 
+            "interpretazione": interpretazione, 
+            "cabala": cabala
+        }), 200
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
