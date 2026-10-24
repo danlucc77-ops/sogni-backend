@@ -248,7 +248,7 @@ def modifica_sogno():
         if not racconto:
             return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
 
-        conn = sqlite3.connect(NOME_DATA)
+        conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
         # Se abbiamo un ID, recuperiamo il nome utente e la data originale del sogno
