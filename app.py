@@ -1,7 +1,7 @@
 import threading
 import sqlite3
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from google import genai
 import os
