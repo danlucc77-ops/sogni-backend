@@ -239,16 +239,22 @@ def modifica_sogno():
     try:
         dati = request.json
         sogno_id = dati.get('id')
+        # Prende il nome utente direttamente inviato dall'app Flutter (o fallback sulla sessione)
+        nome_utente = dati.get('nome_utente') or session.get('nome_utente')
+        
         racconto = dati.get('racconto', '').strip()
         contesto = dati.get('contesto', 'Nessuno specifico').strip()
         pasto = dati.get('pasto', 'Non specifico').strip()
         sostanze = dati.get('sostanze', 'Nessuna').strip()
-        stato_iniziale = dati.get('stato_iniziale', 'Non specifico')
-        stato_finale = dati.get('stato_finale', 'Non specifico')
+        stato_iniziale = dati.get('statoIniziale') or dati.get('stato_iniziale', 'Non specifico')
+        stato_finale = dati.get('statoFinale') or dati.get('stato_finale', 'Non specifico')
 
         if not racconto:
             return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
 
+        if not nome_utente:
+            return jsonify({"success": False, "error": "Utente non identificato."}), 401
+        
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
