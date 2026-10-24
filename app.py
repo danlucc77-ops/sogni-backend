@@ -420,3 +420,29 @@ def analisi_periodica():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+@app.route('/api/elimina-sogno', methods=['POST'])
+def elimina_sogno():
+    try:
+        dati = request.json or {}
+        sogno_id = dati.get('id')
+        nome_utente = (
+            dati.get('nome_utente') or 
+            dati.get('ProfiloUtente') or 
+            session.get('nome_utente')
+        )
+        
+        if not nome_utente or not sogno_id:
+            return jsonify({"success": False, "error": "Dati mancanti o utente non identificato."}), 400
+
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        
+        # Elimina il record verificando l'ID e l'appartenenza all'utente
+        cursor.execute("DELETE FROM sogni WHERE id = ? AND nome_utente = ?", (int(sogno_id), nome_utente))
+        conn.commit()
+        conn.close()
+
+        return jsonify({"success": True, "message": "Sogno eliminato con successo."}), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
