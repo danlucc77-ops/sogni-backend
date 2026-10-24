@@ -283,7 +283,7 @@ def modifica_sogno():
         titolo_studio = profilo.get('titolo_studio', '').strip()
         istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta il linguaggio al titolo di studio: {titolo_studio}."
 
-        es_sues_50 = scarica_ultime estrazioni() if 'scarica_ultime_estrazioni' in globals() else ""
+      es_sues_50 = scarica_ultime_estrazioni() if 'scarica_ultime_estrazioni' in globals() else ""
 
         prompt_combinato = (
             f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
