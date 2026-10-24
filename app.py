@@ -237,52 +237,42 @@ def interpreta_sogno():
 @app.route('/api/modifica-sogno', methods=['POST'])
 def modifica_sogno():
     try:
-        dati = request.json
+        dati = request.json or {}
         sogno_id = dati.get('id')
-        # Prende il nome utente direttamente inviato dall'app Flutter (o fallback sulla sessione)
-        nome_utente = dati.get('nome_utente') or session.get('nome_utente')
         
+        # 1. Recupero pulito dell'utente in un unico punto
+        nome_utente = (
+            dati.get('nome_utente') or 
+            dati.get('ProfiloUtente') or 
+            session.get('nome_utente')
+        )
+        
+        if not nome_utente:
+            return jsonify({"success": False, "error": "Utente non identificato."}), 401
+
         racconto = dati.get('racconto', '').strip()
+        if not racconto:
+            return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
+
         contesto = dati.get('contesto', 'Nessuno specifico').strip()
         pasto = dati.get('pasto', 'Non specifico').strip()
         sostanze = dati.get('sostanze', 'Nessuna').strip()
         stato_iniziale = dati.get('statoIniziale') or dati.get('stato_iniziale', 'Non specifico')
         stato_finale = dati.get('statoFinale') or dati.get('stato_finale', 'Non specifico')
 
-        if not racconto:
-            return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
-
-        if not nome_utente:
-            return jsonify({"success": False, "error": "Utente non identificato."}), 401
-        
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
-        # Recupera il nome utente se non è presente nei dati
-        nome_utente = None
-        if sogno_id is not None:
-            try:
-                cursor.execute('SELECT nome_utente, data FROM sogni WHERE id = ?', (int(sogno_id),))
-                riga = cursor.fetchone()
-                if riga:
-                    nome_utente = riga[0]
-            except Exception:
-                pass
-
-        if not nome_utente:
-            nome_utente = session.get('nome_utente')
-
-        # Recupera il profilo utente per l'IA
+        # 2. Recupera il profilo utente per l'IA
+        cursor.execute('SELECT * FROM utenti WHERE nome = ?', (nome_utente,))
+        utente = cursor.fetchone()
         profilo = {}
-        if nome_utente:
-            cursor.execute('SELECT * FROM utenti WHERE nome = ?', (nome_utente,))
-            utente = cursor.fetchone()
-            if utente:
-                profilo = {
-                    'nome': utente[0], 'sesso': utente[2], 'eta': utente[3],
-                    'condizione': utente[4], 'titolo_studio': utente[5],
-                    'tipo_lavoro': utente[6], 'hobby': utente[7]
-                }
+        if utente:
+            profilo = {
+                'nome': utente[0], 'sesso': utente[2], 'eta': utente[3],
+                'condizione': utente[4], 'titolo_studio': utente[5],
+                'tipo_lavoro': utente[6], 'hobby': utente[7]
+            }
 
         global client
         if not client:
@@ -293,7 +283,7 @@ def modifica_sogno():
         titolo_studio = profilo.get('titolo_studio', '').strip()
         istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta il linguaggio al titolo di studio: {titolo_studio}."
 
-        es_sues_50 = scarica_ultime_estrazioni()
+        es_sues_50 = scarica_ultime estrazioni() if 'scarica_ultime_estrazioni' in globals() else ""
 
         prompt_combinato = (
             f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
@@ -303,7 +293,6 @@ def modifica_sogno():
             f"{istruzioni_linguaggio}\n"
             f"Cena:{pasto}, Sostanze/Alcol:{sostanze}, Contesto:{contesto}\n"
             f"Stato iniziale:{stato_iniziale} -> Sogno:{racconto} -> Stato finale:{stato_finale}\n"
-            f"Storico ultime estrazioni lotto:\n{es_sues_50}\n"
             f"Fornisci la risposta strutturata esattamente in questo modo:\n"
             f"---INTERPRETAZIONE---\n"
             f"[Scrivi qui un'interpretazione psicologica profonda, complessa e strutturata, adeguata al profilo]\n"
@@ -322,29 +311,29 @@ def modifica_sogno():
             interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
             cabala = parti[1].strip()
 
-        # Verifica se l'ID esiste effettivamente nel database SQLite del server
+        # 3. Verifica se l'ID esiste sul database
         esiste = False
         if sogno_id is not None:
             try:
-                cursor.execute("SELECT id FROM sogni WHERE id = ?", (int(sogno_id),))
+                cursor.execute("SELECT id FROM sogni WHERE id = ? AND nome_utente = ?", (int(sogno_id), nome_utente))
                 esiste = cursor.fetchone() is not None
             except Exception:
                 esiste = False
 
         if not esiste:
-            # 1. SE NON ESISTE: Inserisce come nuovo sogno sul server
+            # Inserimento nuovo sogno
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
                 VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (nome_utente, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
             nuovo_id = cursor.lastrowid
         else:
-            # 2. SE ESISTE: Aggiorna il record esistente MANTENENDO LO STESSO ID con UPDATE
+            # Aggiornamento record esistente
             cursor.execute('''
                 UPDATE sogni 
                 SET racconto = ?, contesto = ?, pasto = ?, sostanze = ?, stato_iniziale = ?, stato_finale = ?, interpretazione = ?, cabala = ?
-                WHERE id = ?
-            ''', (racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala, int(sogno_id)))
+                WHERE id = ? AND nome_utente = ?
+            ''', (racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala, int(sogno_id), nome_utente))
             nuovo_id = int(sogno_id)
 
         conn.commit()
@@ -359,30 +348,7 @@ def modifica_sogno():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-        
-        cursor.execute('''
-            UPDATE sogni SET 
-                contesto = ?, pasto = ?, sostanze = ?, 
-                stato_iniziale = ?, racconto = ?, stato_finale = ?, 
-                interpretazione = ?, cabala = ?
-            WHERE id = ?
-        ''', (
-            contesto, pasto, sostanze,
-            stato_iniziale, racconto, stato_finale,
-            interpretazione, cabala, sogno_id
-        ))
-        conn.commit()
-        conn.close()
-
-        return jsonify({
-            "success": True, 
-            "interpretazione": interpretazione, 
-            "cabala": cabala
-        }), 200
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
+   
 @app.route('/api/consigli-personalizzati', methods=['POST'])
 def consigli_personalizzati():
     try:
