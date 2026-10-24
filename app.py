@@ -277,11 +277,11 @@ def modifica_sogno():
                     'tipo_lavoro': utente[6], 'hobby': utente[7]
                 }
 
-        global cliente
-        if not cliente:
+        global client
+        if not client:
             chiave_api = os.getenv('GEMINI_API_KEY')
             if chiave_api:
-                cliente = genai.Client(api_key=chiave_api)
+                client = genai.Client(api_key=chiave_api)
 
         titolo_studio = profilo.get('titolo_studio', '').strip()
         istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta il linguaggio al titolo di studio: {titolo_studio}."
