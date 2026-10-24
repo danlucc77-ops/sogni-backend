@@ -235,74 +235,113 @@ def interpreta_sogno():
 @app.route('/api/modifica-sogno', methods=['POST'])
 def modifica_sogno():
     try:
-        data = request.json
-        sogno_id = data.get('id')
-        racconto = data.get('racconto', '')
-        contesto = data.get('contesto', 'Nessuno specificato')
-        pasto = data.get('pasto', 'Non specificato')
-        sostanze = data.get('sostanze', 'Nessuna')
-        stato_iniziale = data.get('stato_iniziale', 'Non specificato')
-        stato_finale = data.get('stato_finale', 'Non specificato')
-        
-        if not sogno_id or not racconto.strip():
-            return jsonify({"success": False, "error": "ID del sogno e racconto sono obbligatori."}), 400
+        dati = request.json
+        sogno_id = dati.get('id')
+        racconto = dati.get('racconto', '').strip()
+        contesto = dati.get('contesto', 'Nessuno specifico').strip()
+        pasto = dati.get('pasto', 'Non specifico').strip()
+        sostanze = dati.get('sostanze', 'Nessuna').strip()
+        stato_iniziale = dati.get('stato_iniziale', 'Non specifico')
+        stato_finale = dati.get('stato_finale', 'Non specifico')
 
-        conn = sqlite3.connect(DB_NAME)
+        if not racconto:
+            return jsonify({"success": False, "error": "Il racconto del sogno è obbligatorio."}), 400
+
+        conn = sqlite3.connect(NOME_DATA)
         cursor = conn.cursor()
-        
-        # Recupera il profilo utente associato al sogno per mantenere la coerenza del titolo di studio
-        cursor.execute('SELECT nome_utente FROM sogni WHERE id = ?', (sogno_id,))
-        row = cursor.fetchone()
-        nome_utente = row[0] if row else None
-        
+
+        # Se riceviamo un id valido, cerchiamo l'utente associato, altrimenti usiamo la sessione o un default
+        if sogno_id is not None:
+            cursor.execute('SELECT nome_utente FROM sogni WHERE id = ?', (sogno_id,))
+            riga = cursor.fetchone()
+            nome_utente = riga[0] if riga else None
+        else:
+            nome_utente = session.get('nome_utente')
+
+        # Recupera il profilo utente
         profilo = {}
         if nome_utente:
             cursor.execute('SELECT * FROM utenti WHERE nome = ?', (nome_utente,))
-            user = cursor.fetchone()
-            if user:
+            utente = cursor.fetchone()
+            if utente:
                 profilo = {
-                    'nome': user[0], 'sesso': user[2], 'eta': user[3], 'condizione': user[4],
-                    'titolo_studio': user[5], 'tipo_lavoro': user[6], 'hobby': user[7]
+                    'nome': utente[0], 'sesso': utente[2], 'eta': utente[3], 
+                    'condizione': utente[4], 'titolo_studio': utente[5], 
+                    'tipo_lavoro': utente[6], 'hobby': utente[7]
                 }
 
-        global client
-        if not client:
-            api_key = os.environ.get('GEMINI_API_KEY')
-            if api_key:
-                client = genai.Client(api_key=api_key)
+        global cliente
+        if not cliente:
+            chiave_api = os.getenv('GEMINI_API_KEY')
+            if chiave_api:
+                cliente = genai.Client(api_key=chiave_api)
 
         titolo_studio = profilo.get('titolo_studio', '').strip()
-        istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta rigorosamente il registro linguistico, la profondità psicologica e i riferimenti analitici al titolo di studio dell'utente: '{titolo_studio}' (es. laurea/specializzazione)."
-
-        estrazioni_50 = scarica_ultime_estrazioni()
+        istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta il linguaggio al titolo di studio: {titolo_studio}."
+        
+        es_sues_50 = scarica_ultime_estrazioni()
 
         prompt_combinato = (
             f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
             f"Analizza questo sogno aggiornato/modificato:\n"
-            f"Utente: {profilo.get('sesso', 'Utente')}, {profilo.get('eta', '')} anni, Condizione: {profilo.get('condizione', '')}, "
-            f"Titolo di studio: {titolo_studio}, Lavoro: {profilo.get('tipo_lavoro', '')}.\n"
+            f"Utente:{profilo.get('sesso','Utente')},{profilo.get('eta','')}anni, visto:{profilo.get('condizione','')}, "
+            f"Titolo di studio:{titolo_studio}, Lavoro:{profilo.get('tipo_lavoro','')}.\n"
             f"{istruzioni_linguaggio}\n\n"
-            f"Cena: {pasto}, Sostanze/Alcol: {sostanze}, Contesto: {contesto}.\n"
-            f"Stato iniziale: {stato_iniziale} ➔ Sogno aggiornato: \"{racconto}\" ➔ Stato finale: {stato_finale}.\n"
-            f"Storico ultime estrazioni lotto:\n{estrazioni_50}\n\n"
+            f"Cena:{pasto}, Sostanze/Alcol:{sostanze}, Contesto:{contesto}.\n"
+            f"Stato iniziale:{stato_iniziale} → Sogno:{racconto} → Stato finale:{stato_finale}.\n"
+            f"Storico ultime estrazioni lotto:\n{es_sues_50}\n\n"
             f"Fornisci la risposta strutturata esattamente in questo modo:\n"
             f"---INTERPRETAZIONE---\n"
-            f"[Scrivi qui un'interpretazione psicologica profonda, complessa e strutturata, adeguata al profilo di studi dell'utente]\n\n"
+            f"[Scrivi qui un'interpretazione psicologica profonda, complessa e strutturata, adeguata al profilo]\n"
             f"---CABALA---\n"
             f"[Estrai i simboli chiave, convertili nei numeri della Smorfia e suggerisci una previsione mirata]"
         )
 
-        response = client.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
-        testo_totale = response.text
+        risposta = cliente.models.generate_content(model='gemini-3.8-flash', contents=prompt_combinato)
+        testo_totale = risposta.text
 
         interpretazione = testo_totale
         cabala = "Numeri e cabala elaborati dal sogno."
-        
+
         if "---CABALA---" in testo_totale:
             parti = testo_totale.split("---CABALA---")
             interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
             cabala = parti[1].strip()
 
+        if sogno_id is None:
+            # SOGNO AL VOLO: Inserisce un nuovo record nel database (INSERT)
+            cursor.execute('''
+                INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
+                VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (nome_utente, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
+            conn.commit()
+            nuovo_id = cursor.lastrowid
+            conn.close()
+            return jsonify({
+                "success": True,
+                "id": nuovo_id,
+                "interpretazione": interpretazione,
+                "cabala": cabala
+            }), 200
+        else:
+            # SOGNO ESISTENTE: Aggiorna il record esistente (UPDATE)
+            cursor.execute('''
+                UPDATE sogni 
+                SET contesto = ?, pasto = ?, sostanze = ?, stato_iniziale = ?, racconto = ?, stato_finale = ?, interpretazione = ?, cabala = ?
+                WHERE id = ?
+            ''', (contesto, pasto, sostanze, stato_iniziale, racconto, stato_finale, interpretazione, cabala, sogno_id))
+            conn.commit()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "id": sogno_id,
+                "interpretazione": interpretazione,
+                "cabala": cabala
+            }), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+        
         cursor.execute('''
             UPDATE sogni SET 
                 contesto = ?, pasto = ?, sostanze = ?, 
