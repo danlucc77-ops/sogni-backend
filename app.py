@@ -240,7 +240,7 @@ def modifica_sogno():
         dati = request.json or {}
         sogno_id = dati.get('id')
         
-        # 1. Recupero pulito dell'utente in un unico punto
+        # Recupero unificato dell'utente
         nome_utente = (
             dati.get('nome_utente') or 
             dati.get('ProfiloUtente') or 
@@ -263,7 +263,7 @@ def modifica_sogno():
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
-        # 2. Recupera il profilo utente per l'IA
+        # Recupera il profilo utente per l'IA
         cursor.execute('SELECT * FROM utenti WHERE nome = ?', (nome_utente,))
         utente = cursor.fetchone()
         profilo = {}
@@ -283,7 +283,7 @@ def modifica_sogno():
         titolo_studio = profilo.get('titolo_studio', '').strip()
         istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta il linguaggio al titolo di studio: {titolo_studio}."
 
-es_sues_50 = scarica_ultime_estrazioni() if 'scarica_ultime_estrazioni' in globals() else ""
+        es_sues_50 = scarica_ultime_estrazioni() if 'scarica_ultime_estrazioni' in globals() else ""
 
         prompt_combinato = (
             f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
@@ -311,7 +311,7 @@ es_sues_50 = scarica_ultime_estrazioni() if 'scarica_ultime_estrazioni' in globa
             interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
             cabala = parti[1].strip()
 
-        # 3. Verifica se l'ID esiste sul database
+        # Verifica se l'ID esiste sul database per questo utente
         esiste = False
         if sogno_id is not None:
             try:
@@ -321,14 +321,12 @@ es_sues_50 = scarica_ultime_estrazioni() if 'scarica_ultime_estrazioni' in globa
                 esiste = False
 
         if not esiste:
-            # Inserimento nuovo sogno
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
                 VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (nome_utente, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
             nuovo_id = cursor.lastrowid
         else:
-            # Aggiornamento record esistente
             cursor.execute('''
                 UPDATE sogni 
                 SET racconto = ?, contesto = ?, pasto = ?, sostanze = ?, stato_iniziale = ?, stato_finale = ?, interpretazione = ?, cabala = ?
