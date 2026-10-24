@@ -234,6 +234,7 @@ def interpreta_sogno():
 
 @app.route('/api/modifica-sogno', methods=['POST'])
 @app.route('/api/modifica-sogno', methods=['POST'])
+@app.route('/api/modifica-sogno', methods=['POST'])
 def modifica_sogno():
     try:
         dati = request.json
@@ -251,16 +252,16 @@ def modifica_sogno():
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
-        # Se abbiamo un ID, recuperiamo il nome utente e la data originale del sogno
-        data_originale = None
+        # Recupera il nome utente se non è presente nei dati
         nome_utente = None
         if sogno_id is not None:
-            sogno_id = int(sogno_id)
-            cursor.execute('SELECT nome_utente, data FROM sogni WHERE id = ?', (sogno_id,))
-            riga = cursor.fetchone()
-            if riga:
-                nome_utente = riga[0]
-                data_originale = riga[1] # Mantiene la data e l'ora originarie intatte!
+            try:
+                cursor.execute('SELECT nome_utente, data FROM sogni WHERE id = ?', (int(sogno_id),))
+                riga = cursor.fetchone()
+                if riga:
+                    nome_utente = riga[0]
+            except Exception:
+                pass
 
         if not nome_utente:
             nome_utente = session.get('nome_utente')
@@ -272,8 +273,8 @@ def modifica_sogno():
             utente = cursor.fetchone()
             if utente:
                 profilo = {
-                    'nome': utente[0], 'sesso': utente[2], 'eta': utente[3], 
-                    'condizione': utente[4], 'titolo_studio': utente[5], 
+                    'nome': utente[0], 'sesso': utente[2], 'eta': utente[3],
+                    'condizione': utente[4], 'titolo_studio': utente[5],
                     'tipo_lavoro': utente[6], 'hobby': utente[7]
                 }
 
@@ -285,18 +286,18 @@ def modifica_sogno():
 
         titolo_studio = profilo.get('titolo_studio', '').strip()
         istruzioni_linguaggio = "Usa un linguaggio semplice e colloquiale." if not titolo_studio else f"Adatta il linguaggio al titolo di studio: {titolo_studio}."
-        
+
         es_sues_50 = scarica_ultime_estrazioni()
 
         prompt_combinato = (
             f"Agisci come un esperto di analisi onirica, psicodinamica profonda e di cabala napoletana.\n"
             f"Analizza questo sogno aggiornato/modificato:\n"
-            f"Utente:{profilo.get('sesso','Utente')},{profilo.get('eta','')}anni, visto:{profilo.get('condizione','')}, "
+            f"Utente:{profilo.get('sesso', 'Utente')},{profilo.get('eta','')}anni, visto:{profilo.get('condizione','')}, "
             f"Titolo di studio:{titolo_studio}, Lavoro:{profilo.get('tipo_lavoro','')}.\n"
-            f"{istruzioni_linguaggio}\n\n"
-            f"Cena:{pasto}, Sostanze/Alcol:{sostanze}, Contesto:{contesto}.\n"
-            f"Stato iniziale:{stato_iniziale} → Sogno:{racconto} → Stato finale:{stato_finale}.\n"
-            f"Storico ultime estrazioni lotto:\n{es_sues_50}\n\n"
+            f"{istruzioni_linguaggio}\n"
+            f"Cena:{pasto}, Sostanze/Alcol:{sostanze}, Contesto:{contesto}\n"
+            f"Stato iniziale:{stato_iniziale} -> Sogno:{racconto} -> Stato finale:{stato_finale}\n"
+            f"Storico ultime estrazioni lotto:\n{es_sues_50}\n"
             f"Fornisci la risposta strutturata esattamente in questo modo:\n"
             f"---INTERPRETAZIONE---\n"
             f"[Scrivi qui un'interpretazione psicologica profonda, complessa e strutturata, adeguata al profilo]\n"
@@ -315,38 +316,38 @@ def modifica_sogno():
             interpretazione = parti[0].replace("---INTERPRETAZIONE---", "").strip()
             cabala = parti[1].strip()
 
-       # Verifica se l'ID esiste effettivamente nel database SQLite
+        # Verifica se l'ID esiste effettivamente nel database SQLite del server
         esiste = False
         if sogno_id is not None:
             try:
                 cursor.execute("SELECT id FROM sogni WHERE id = ?", (int(sogno_id),))
                 esiste = cursor.fetchone() is not None
-            except:
+            except Exception:
                 esiste = False
 
         if not esiste:
-            # 1. NUOVO SOGNO / BOZZA AL VOLO (o ID temporaneo inesistente nel DB): Inserisce con data e ora attuali
+            # 1. SE NON ESISTE: Inserisce come nuovo sogno sul server
             cursor.execute('''
                 INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
                 VALUES (?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (nome_utente, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
             nuovo_id = cursor.lastrowid
         else:
-            # 2. MODIFICA DI UN SOGNO ESISTENTE: Elimina il vecchio e inserisce il nuovo preservando la data originaria!
-            cursor.execute('DELETE FROM sogni WHERE id = ?', (int(sogno_id),))
+            # 2. SE ESISTE: Aggiorna il record esistente MANTENENDO LO STESSO ID con UPDATE
             cursor.execute('''
-                INSERT INTO sogni (nome_utente, data, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (nome_utente, data_originale, racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala))
-            nuovo_id = cursor.lastrowid
+                UPDATE sogni 
+                SET racconto = ?, contesto = ?, pasto = ?, sostanze = ?, stato_iniziale = ?, stato_finale = ?, interpretazione = ?, cabala = ?
+                WHERE id = ?
+            ''', (racconto, contesto, pasto, sostanze, stato_iniziale, stato_finale, interpretazione, cabala, int(sogno_id)))
+            nuovo_id = int(sogno_id)
 
         conn.commit()
         conn.close()
 
         return jsonify({
-            "success": True, 
-            "id": nuovo_id, 
-            "interpretazione": interpretazione, 
+            "success": True,
+            "id": nuovo_id,
+            "interpretazione": interpretazione,
             "cabala": cabala
         }), 200
 
